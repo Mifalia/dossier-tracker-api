@@ -1,0 +1,343 @@
+openapi: 3.0.0
+info:
+  title: Dossier Tracking API
+  version: 1.0.0
+  description: |
+    API pour le suivi de dossiers avec :
+    - Gestion des utilisateurs
+    - Workflow de validation des dossiers
+    - Authentification JWT
+  contact:
+    name: Support technique
+    email: support@dossier-tracker.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Environnement de développement
+  - url: https://api.dossier-tracker.com/v1
+    description: Environnement de production
+
+paths:
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authentification utilisateur
+      description: Génère un token JWT pour l'accès aux autres endpoints
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: "password123"
+              required:
+                - email
+                - password
+      responses:
+        200:
+          description: Authentification réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        400:
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        401:
+          description: Non autorisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dossiers:
+    get:
+      tags: [Dossiers]
+      summary: Lister tous les dossiers
+      description: Retourne une liste paginée de dossiers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in-review, approved, rejected]
+      responses:
+        200:
+          description: Liste des dossiers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 5
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dossier'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Dossiers]
+      summary: Créer un nouveau dossier
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Dossier'
+      responses:
+        201:
+          description: Dossier créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dossier'
+        400:
+          $ref: '#/components/responses/BadRequest'
+
+  /dossiers/{id}:
+    get:
+      tags: [Dossiers]
+      summary: Obtenir un dossier par ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 123
+      responses:
+        200:
+          description: Détails du dossier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dossier'
+        404:
+          description: Dossier non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Dossiers]
+      summary: Mettre à jour un dossier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Dossier'
+      responses:
+        200:
+          description: Dossier mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dossier'
+        403:
+          description: Modification non autorisée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users:
+    get:
+      tags: [Users]
+      summary: Lister les utilisateurs (Admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [user, admin]
+      responses:
+        200:
+          description: Liste des utilisateurs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        403:
+          description: Accès réservé aux administrateurs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Utiliser le JWT obtenu après authentification
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          writeOnly: true
+          example: "secret123"
+        role:
+          type: string
+          enum: [user, admin]
+          default: user
+          description: |
+            Rôle de l'utilisateur :
+            - user : Accès basique
+            - admin : Accès complet
+      required:
+        - name
+        - email
+        - password
+
+    Dossier:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 123
+        title:
+          type: string
+          minLength: 5
+          maxLength: 100
+          example: "Dossier client XYZ"
+        description:
+          type: string
+          maxLength: 500
+          example: "Dossier pour le projet de construction"
+        status:
+          type: string
+          enum: [pending, in-review, approved, rejected]
+          default: pending
+          description: |
+            Statut du dossier :
+            - pending : En attente de traitement
+            - in-review : En cours de revue
+            - approved : Approuvé
+            - rejected : Rejeté
+        createdBy:
+          type: integer
+          format: int64
+          example: 1
+        assignedTo:
+          type: integer
+          format: int64
+          example: 2
+        documents:
+          type: array
+          items:
+            type: string
+            format: uri
+            example: "/uploads/document-123.pdf"
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+        - title
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+          example: "Erreur d'authentification"
+        details:
+          type: array
+          items:
+            type: string
+          example: ["Mot de passe incorrect"]
+
+  responses:
+    Unauthorized:
+      description: Token JWT manquant ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Données de requête invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
