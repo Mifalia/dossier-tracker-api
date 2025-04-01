@@ -1,10 +1,29 @@
+const { User } = require('../models');
 const Dossier = require('../models/Dossier');
 
 // @desc    Get all dossiers
 // @route   GET /api/v1/dossiers
 exports.getDossiers = async (req, res, next) => {
   try {
-    const dossiers = await Dossier.find().populate('createdBy', 'name email');
+    const { user } = req;
+
+    const whereClause = user.role !== 'admin' ? { where: { createdBy: req.user.id } } : {};
+    
+    const dossiers = await Dossier.findAll({
+      include: [
+        {
+          model: User,
+          as: 'Creator',
+          attributes: ['id', 'name', 'email'], // Select only these columns
+        },
+        {
+          model: User,
+          as: 'Assignee',
+          attributes: ['id', 'name', 'email'], // Select only these columns
+        },
+      ],
+      ...whereClause,
+    });
     res.status(200).json({ success: true, count: dossiers.length, data: dossiers });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
